@@ -248,3 +248,99 @@ PureFlow AI는 **문헌 기반 시뮬레이션 데이터와 규칙 기반 최적
 
 ## 핵심 가치
 > **필요한 물은 유지하고, 품질을 희생하지 않는 범위에서 줄일 수 있는 물을 찾아낸다.**
+
+
+# Appendix — 문헌 기반 세정 성능 모델
+
+## 1. 모델의 역할
+PureFlow AI는 실제 세정 성능을 측정하는 시스템이 아니다. 문헌에서 확인된 세정·린스 변수와 표면 오염 측정 방법을 근거로 **MVP용 surrogate model**을 구성하고, 품질 기준을 먼저 통과시킨 후보 중 최소 UPW 조건을 탐색한다.
+
+## 2. 대표 공정
+**BEOL Cu/Low-k Post-Etch Clean + UPW Rinse**
+
+Post-etch wet clean은 Cu/low-k interconnection에서 etch residue와 Cu 관련 contamination을 제거하는 중요한 공정이다.
+
+## 3. 품질 지표
+**Cu surface contamination [atoms/cm²]**
+
+MVP 1차 Gate:
+
+```text
+Cu ≤ 1.0 × 10¹⁰ atoms/cm²
+```
+
+이 값은 MVP용 보수적 Gate이며 모든 반도체 공정에 대한 보편적 공식 규격으로 표현하지 않는다.
+
+## 4. 세정 성능 판단
+세정 성능을 0~100 점수로 만들지 않는다.
+
+```text
+예상 잔류 Cu ≤ 허용 기준
+→ 품질 기준 충족
+
+예상 잔류 Cu > 허용 기준
+→ 후보 탈락
+```
+
+## 5. MVP surrogate model
+```text
+R_pred =
+R_floor
++
+(R_initial - R_floor)
+× exp(
+    -K
+    × t
+    × (Q / Q_ref)^α
+    × N^β
+)
+```
+
+- `R_pred`: 예상 잔류 Cu [atoms/cm²]
+- `R_initial`: 초기 Cu 오염
+- `R_floor`: 모델상의 최소 잔류값
+- `K`: 제거 속도 보정계수
+- `t`: 유효 세정/린스 시간
+- `Q`: UPW 유량
+- `Q_ref`: 기준 유량
+- `N`: cycle 수
+- `α`: 유량 민감도
+- `β`: cycle 효과
+
+**K, α, β 및 공정별 초기값은 문헌의 직접 측정 계수가 아니라 MVP 시뮬레이션용 calibration parameter다.**
+
+## 6. 문헌에서 모델 변수 선정의 근거
+2025년 연구에서는 단일 웨이퍼 DIW rinse에서 금속의 wafer-surface adsorption을 조사했고, Cu의 adsorption ratio가 2.6~3.3%였으며 Cu adsorption이 공급 유량에 따라 달라지는 경향을 보고했다. 또한 금속 농도, rinse time, supply flow rate를 실험 변수로 다뤘다.
+
+별도의 single-wafer rinse 모델 연구에서는 flow rate, wafer size, rotation speed 등의 영향을 공정 모델로 분석했으며, 물 사용량 최소화를 위한 rinse recipe 최적화 가능성을 제시했다.
+
+Post-etch Cu/low-k 연구에서는 wet clean이 etch residue, Cu-related contamination, 그리고 전기적/신뢰성 특성에 영향을 줄 수 있음을 보여준다.
+
+따라서 PureFlow AI의 모델 입력은 `세정/린스 시간`, `UPW 유량`, `cycle`, `wafer size`, `초기 오염 수준`으로 제한한다.
+
+## 7. 추천 로직
+```text
+후보 조건 생성
+↓
+후보별 예상 잔류 Cu 계산
+↓
+허용 Cu 기준 초과 후보 제거
+↓
+남은 후보의 UPW 계산
+↓
+가장 낮은 UPW 선택
+```
+
+즉:
+
+> **품질 검증이 UPW 최적화보다 먼저다.**
+
+## 8. 모델 한계
+이 모델은 실제 수율 예측, 실제 Fab recipe 추천, 실제 장비 제어에 사용하지 않는다. 실제 적용을 위해서는 공정별 실험 데이터로 `K, α, β` 등을 보정하고 별도 검증이 필요하다.
+
+## 9. 참고 문헌
+- Tsutano K. et al., ECS Journal of Solid State Science and Technology (2025), DOI 10.1149/2162-8777/add809.
+- Tsang C.F. et al., Microelectronics Reliability 45 (2005), 517–525, DOI 10.1016/j.microrel.2004.07.007.
+- Surface cleaning of small structures during spin rinsing of patterned substrates, Microelectronic Engineering 108 (2013), 57–65, DOI 10.1016/j.mee.2013.02.092.
+- Experimental and Modelling Investigation of Re-Adhesion Mechanism of Detached Nanoparticles to Wafer Surface in Spin Rinse Process, ECS JSST (2020), DOI 10.1149/2162-8777/ab9fe9.
+- Rinsing of high-aspect-ratio features on patterned wafers, IEEE TSM 30 (2017), DOI 10.1109/TSM.2016.2615857.

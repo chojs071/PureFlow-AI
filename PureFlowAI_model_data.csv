@@ -1,0 +1,9 @@
+process_id,process_name,wafer_diameter_mm,contamination_band,initial_cu_atoms_cm2,allowable_cu_atoms_cm2,reference_flow_l_min,reference_time_min,reference_cycles,K,alpha,beta,R_floor_cu_atoms_cm2
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,200,low,8.0e9,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,200,medium,1.2e10,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,200,high,2.0e10,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,200,very_high,3.0e10,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,300,low,8.0e9,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,300,medium,1.2e10,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,300,high,2.0e10,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
+P001,BEOL Cu/Low-k Post-Etch Clean + UPW Rinse,300,very_high,3.0e10,1.0e10,10,10,2,0.10,0.40,0.20,5.0e8
