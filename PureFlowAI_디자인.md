@@ -446,3 +446,531 @@ Post-etch Cu/low-k 연구에서는 wet clean이 etch residue, Cu-related contami
 - Surface cleaning of small structures during spin rinsing of patterned substrates, Microelectronic Engineering 108 (2013), 57–65, DOI 10.1016/j.mee.2013.02.092.
 - Experimental and Modelling Investigation of Re-Adhesion Mechanism of Detached Nanoparticles to Wafer Surface in Spin Rinse Process, ECS JSST (2020), DOI 10.1149/2162-8777/ab9fe9.
 - Rinsing of high-aspect-ratio features on patterned wafers, IEEE TSM 30 (2017), DOI 10.1109/TSM.2016.2615857.
+
+# 25. 개발용 기능 프롬프트
+
+아래 프롬프트는 PureFlow AI의 실제 MVP 구현을 위해 Cursor, Claude Code, Gemini, ChatGPT 등의 코딩 AI에 전달할 수 있다.
+
+## 25.1 전체 구현 프롬프트
+
+```text
+PureFlow AI라는 반도체 공정 초순수(UPW) 사용량 최적화 시뮬레이션 웹앱을 구현한다.
+
+핵심 원칙:
+1. 품질을 희생해서 UPW를 줄이지 않는다.
+2. 공정별 허용 잔류 오염 기준을 먼저 확인한다.
+3. 허용 기준을 초과하는 후보는 절대 추천하지 않는다.
+4. 품질 기준을 충족하는 후보 중 UPW 사용량이 가장 적은 조건을 추천한다.
+5. 실제 Fab 장비나 생산라인에 연결하지 않는다.
+6. 모든 데이터는 문헌 기반 시뮬레이션 데이터라고 표시한다.
+7. 실제 생산 수율이나 실제 장비 recipe를 예측한다고 표현하지 않는다.
+
+대표 MVP 공정:
+BEOL Cu/Low-k Post-Etch Clean + UPW Rinse
+
+대표 품질 지표:
+Cu surface contamination [atoms/cm²]
+
+MVP 1차 품질 Gate:
+Cu <= 1.0 × 10¹⁰ atoms/cm²
+
+세정 성능 판정:
+predictedResidualCu <= allowableCu
+
+추천 로직:
+후보 생성 -> 잔류 Cu 계산 -> 품질 기준 통과 후보만 유지 -> UPW 계산 -> 최소 UPW 후보 선택
+
+화면은 전문적인 반도체 제조 시스템 + AI 분석 플랫폼 + ESG 대시보드 스타일로 구현한다.
+```
+
+## 25.2 시작 화면 구현 프롬프트
+
+```text
+PureFlow AI 시작 화면을 구현한다.
+
+필수 요소:
+- PureFlow AI 로고/타이틀
+- "AI 기반 초순수 최적화 시스템"
+- 핵심 문구: "품질은 유지하고, 불필요한 UPW 사용은 줄입니다."
+- 웨이퍼 직경 선택: 200mm / 300mm
+- "AI 최적화 시작" 버튼
+
+상호작용:
+- 200mm 또는 300mm 중 하나를 선택할 수 있다.
+- 웨이퍼를 선택하지 않으면 최적화 시작 버튼을 비활성화한다.
+- 시작 버튼을 누르면 AI 분석 화면으로 전환한다.
+
+상태:
+- 선택된 wafer는 Electric Blue 강조
+- 선택되지 않은 wafer는 Border 스타일
+- 버튼 클릭 시 분석 상태로 진입
+```
+
+## 25.3 AI 분석 애니메이션 구현 프롬프트
+
+```text
+AI 분석 진행 화면을 구현한다.
+
+순서:
+1. 웨이퍼 상태 분석
+2. 오염도 분석
+3. 세정 조건 분석
+4. 후보 조건 생성
+5. 잔류 오염 계산
+6. 품질 기준 검증
+7. 최적 조건 선택
+
+각 단계는:
+- pending
+- active
+- complete
+상태를 가진다.
+
+active 단계는 pulse animation을 사용한다.
+complete 단계는 CheckCircle 아이콘을 사용한다.
+전체 애니메이션은 2~4초 이내로 완료한다.
+
+사용자에게 실제 AI 서버가 추론 중이라고 오해시키지 않는다.
+"Simulation Analysis" 성격의 분석임을 유지한다.
+```
+
+## 25.4 공정 데이터 로딩 프롬프트
+
+```text
+공정 데이터를 simulation dataset에서 읽어오도록 구현한다.
+
+각 process object는 최소한 다음 필드를 가진다.
+
+{
+  id,
+  name,
+  description,
+  waferDiameter,
+  contaminationScore,
+  contaminationBand,
+  baselineRecipe: {
+    cleaningTime,
+    rinseTime,
+    flowRate,
+    cycles
+  },
+  allowableOptimizationRange,
+  initialCuAtomsCm2,
+  allowableCuAtomsCm2,
+  modelParameters: {
+    R_floor,
+    K,
+    alpha,
+    beta,
+    Q_ref
+  },
+  reference
+}
+
+실제 생산라인 데이터처럼 표현하지 않는다.
+데이터 출처 상태는 "Literature-based simulation data"로 표시할 수 있다.
+```
+
+## 25.5 세정 성능 계산 프롬프트
+
+```text
+후보 세정 조건의 예상 잔류 Cu를 계산하는 함수를 구현한다.
+
+surrogate model:
+
+R_pred =
+R_floor +
+(R_initial - R_floor) *
+exp(
+  -K *
+  t *
+  (Q / Q_ref)^alpha *
+  N^beta
+)
+
+입력:
+- R_initial
+- R_floor
+- K
+- alpha
+- beta
+- t
+- Q
+- Q_ref
+- N
+
+출력:
+- predictedResidualCu
+
+단위:
+atoms/cm²
+
+주의:
+이 모델은 MVP용 문헌 기반 surrogate simulation model이다.
+실제 Fab의 검증된 물리식으로 표현하지 않는다.
+```
+
+## 25.6 후보 조건 생성 프롬프트
+
+```text
+기준 세정 조건과 공정별 허용 범위를 이용해 후보 조건을 생성한다.
+
+최적화 변수:
+- cleaningTime
+- rinseTime
+- flowRate
+- cycles
+
+규칙:
+1. 기준 조건에서 허용된 범위 밖으로 벗어나지 않는다.
+2. 한 번에 너무 큰 변화가 발생하지 않도록 단계적으로 감소시킨다.
+3. 각 후보의 UPW 사용량을 계산한다.
+4. 중복 후보는 제거한다.
+
+예:
+10분 / 8분 / 10L/min / 2회
+9분 / 8분 / 10L/min / 2회
+9분 / 7분 / 10L/min / 2회
+8분 / 7분 / 9L/min / 2회
+```
+
+## 25.7 품질 Gate 프롬프트
+
+```text
+모든 후보를 UPW 절감량으로 비교하기 전에 품질 기준을 먼저 판정한다.
+
+판정:
+predictedResidualCu <= allowableCu
+
+true:
+- qualityPass = true
+- 후보 유지
+
+false:
+- qualityPass = false
+- 후보 탈락
+
+절대로 qualityPass=false인 후보를 AI 추천 후보로 남기지 않는다.
+
+UI에는:
+- "✓ 품질 기준 충족"
+- "✕ 허용 기준 초과"
+를 표시한다.
+```
+
+## 25.8 AI 추천 프롬프트
+
+```text
+AI recommendation algorithm:
+
+1. 후보 조건 생성
+2. 각 후보의 predictedResidualCu 계산
+3. allowableCu와 비교
+4. qualityPass=true인 후보만 필터링
+5. 각 후보의 UPW 계산
+6. UPW 오름차순 정렬
+7. 가장 작은 UPW 후보 선택
+
+의사코드:
+
+validCandidates = candidates
+  .filter(c => c.predictedResidualCu <= c.allowableCu)
+  .sort((a, b) => a.upw - b.upw)
+
+recommendation = validCandidates[0]
+
+validCandidates가 비어 있다면:
+- 기존 기준 조건을 유지
+- "절감 가능한 조건을 찾지 못했습니다." 표시
+- 품질을 희생하는 추천은 하지 않는다.
+```
+
+## 25.9 UPW 계산 프롬프트
+
+```text
+UPW 사용량을 계산한다.
+
+stepUPW =
+flowRate × time × cycles
+
+여러 단계가 존재하면:
+
+totalUPW =
+sum(step.flowRate × step.time × step.cycles)
+
+단위:
+L
+
+절감량:
+baselineUPW - recommendedUPW
+
+절감률:
+((baselineUPW - recommendedUPW) / baselineUPW) × 100
+```
+
+## 25.10 고오염 공정 예외 규칙 프롬프트
+
+```text
+contaminationScore >= 90인 경우:
+
+- minimumCleaningTime 이하로 cleaningTime을 낮추지 않는다.
+- 다른 최적화 변수는 공정별 허용 범위 안에서만 조절한다.
+- 품질 기준은 동일하게 적용한다.
+
+핵심:
+고오염 상태라고 해서 품질 기준을 완화하지 않는다.
+오히려 절감 범위를 보수적으로 제한한다.
+```
+
+## 25.11 현재 공정 카드 구현 프롬프트
+
+```text
+현재 공정 카드에 아래 정보를 표시한다.
+
+1. 현재 공정명
+2. 공정 설명
+3. 오염도
+4. 기준 UPW
+5. AI 추천 UPW
+6. 절감량
+7. 절감률
+8. 예상 잔류 Cu
+9. 허용 Cu 기준
+10. 품질 판정
+
+예:
+
+오염도
+85 / 100
+
+기준 UPW
+120 L
+
+AI 추천 UPW
+100 L
+
+절감
+20 L
+16.7%
+
+예상 잔류 Cu
+8.4 × 10⁹ atoms/cm²
+
+허용 기준
+≤ 1.0 × 10¹⁰ atoms/cm²
+
+✓ 품질 기준 충족
+
+"품질 점수 97/100"과 같은 임의 점수 UI는 사용하지 않는다.
+```
+
+## 25.12 후보 비교 테이블 구현 프롬프트
+
+```text
+사용자가 AI 추천의 근거를 이해할 수 있도록 후보 비교 테이블을 제공한다.
+
+열:
+- UPW
+- 예상 잔류 Cu
+- 허용 기준
+- 품질 판정
+- 선택 여부
+
+예:
+
+120 L | 6.2×10⁹ | ≤1.0×10¹⁰ | ✓ | -
+110 L | 7.0×10⁹ | ≤1.0×10¹⁰ | ✓ | -
+100 L | 8.4×10⁹ | ≤1.0×10¹⁰ | ✓ | AI 추천
+90 L  | 1.3×10¹⁰ | ≤1.0×10¹⁰ | ✕ | 제외
+
+품질 기준을 초과한 후보는 시각적으로 탈락 상태를 명확하게 표시한다.
+```
+
+## 25.13 다음 공정 프롬프트
+
+```text
+현재 공정 분석이 완료된 뒤 "다음 공정" 버튼을 활성화한다.
+
+조건:
+- 결과 계산이 완료되어야 한다.
+- 추천 조건이 결정되어야 한다.
+- 품질 기준 판정이 완료되어야 한다.
+
+버튼 클릭:
+- 현재 공정을 완료 상태로 변경
+- 공정 진행 indicator 업데이트
+- 다음 공정 카드 로딩
+- 완료된 공정 결과를 누적한다.
+
+마지막 공정에서는:
+"최종 결과 보기" 버튼을 표시한다.
+```
+
+## 25.14 최종 결과 프롬프트
+
+```text
+모든 공정의 결과를 합산하여 최종 대시보드를 표시한다.
+
+표시:
+- 총 기존 UPW
+- 총 AI UPW
+- 총 절감량
+- 총 절감률
+- 품질 기준 충족 공정 수
+- 전체 공정 수
+
+공정별 테이블:
+- 공정
+- 기존 UPW
+- AI UPW
+- 예상 잔류 Cu
+- 허용 기준
+- 품질 판정
+- 절감량
+- 절감률
+
+메시지:
+"품질을 희생하지 않고, 줄일 수 있는 UPW를 찾아냈습니다."
+
+단, 모든 추천 조건은 품질 기준을 충족해야 한다.
+```
+
+## 25.15 ESG 카드 프롬프트
+
+```text
+ESG 결과 카드에 다음을 표시한다.
+
+- UPW 절감량
+- 전력 절감량
+- 탄소 절감량
+
+주의:
+실제로 계산된 값만 표시한다.
+계산되지 않은 값은 시뮬레이션 값이라고 명시한다.
+
+UPW 절감량은 실제 최적화 결과에서 직접 계산한다.
+전력/탄소 값은 별도 simulation conversion factor가 정의된 경우에만 계산한다.
+```
+
+## 25.16 상태 관리 프롬프트
+
+```text
+애플리케이션 상태는 다음 단계로 관리한다.
+
+START
+→ ANALYZING
+→ PROCESS_ACTIVE
+→ PROCESS_COMPLETE
+→ NEXT_PROCESS
+→ FINAL_RESULT
+
+각 process에는:
+- baseline
+- candidates
+- validCandidates
+- recommendation
+- predictedResidualCu
+- qualityPass
+- savings
+상태를 저장한다.
+
+사용자가 브라우저를 새로고침해도 복구가 필요하면 local state 또는 session storage를 사용한다.
+실제 DB는 MVP 범위에 포함하지 않는다.
+```
+
+## 25.17 오류 처리 프롬프트
+
+```text
+다음 상황을 안전하게 처리한다.
+
+1. validCandidates가 0개
+→ "현재 조건에서는 품질 기준을 유지하면서 UPW를 줄일 수 없습니다."
+→ 기존 기준 조건 유지
+
+2. 모델 계산 오류
+→ 추천값을 임의로 생성하지 않는다.
+→ 오류 상태를 표시한다.
+
+3. 허용 기준 데이터 누락
+→ 공정 최적화를 실행하지 않는다.
+→ "품질 기준 데이터가 없어 최적화를 수행할 수 없습니다."
+
+4. 필수 공정 데이터 누락
+→ 해당 공정을 추천 대상에서 제외하지 말고 오류 상태로 표시한다.
+```
+
+## 25.18 접근성 구현 프롬프트
+
+```text
+접근성을 반드시 적용한다.
+
+- 색상만으로 pass/fail을 표현하지 않는다.
+- CheckCircle/ShieldCheck + 텍스트를 함께 사용한다.
+- 버튼은 keyboard focus를 지원한다.
+- 충분한 contrast를 유지한다.
+- 그래프와 숫자에 text label을 제공한다.
+- 상태 변화는 aria-live 또는 접근 가능한 방식으로 전달한다.
+```
+
+## 25.19 컴포넌트 구조 권장안
+
+```text
+App
+├── StartScreen
+├── WaferSelector
+├── AIAnalysisScreen
+├── ProcessProgress
+├── ProcessSimulation
+│   ├── ProcessHeader
+│   ├── ContaminationGauge
+│   ├── RecipeCard
+│   ├── UPWComparison
+│   ├── ResidualContaminationCard
+│   ├── QualityGate
+│   └── CandidateComparison
+├── FinalDashboard
+│   ├── SummaryCards
+│   ├── ProcessComparisonTable
+│   ├── UPWSavingsChart
+│   └── ESGCard
+└── shared
+    ├── Button
+    ├── Card
+    ├── Badge
+    └── StatusIndicator
+```
+
+## 25.20 구현 검증 체크리스트
+
+```text
+- [ ] 200mm / 300mm 선택 가능
+- [ ] AI 분석 단계 애니메이션 동작
+- [ ] 공정별 오염도 표시
+- [ ] 기준 세정 조건 표시
+- [ ] 후보 조건 자동 생성
+- [ ] 후보별 예상 잔류 Cu 계산
+- [ ] 허용 기준 비교
+- [ ] 기준 초과 후보 자동 탈락
+- [ ] 최소 UPW 후보 자동 선택
+- [ ] 품질 점수 0~100 방식 제거
+- [ ] 기존 UPW 계산
+- [ ] AI UPW 계산
+- [ ] 절감량 계산
+- [ ] 절감률 계산
+- [ ] 다음 공정 이동
+- [ ] 최종 누적 결과
+- [ ] 후보 비교 테이블
+- [ ] 품질 기준 충족 표시
+- [ ] 고오염도 90 이상 최소 세정시간 유지
+- [ ] validCandidates=0 안전 처리
+- [ ] 데이터 누락 안전 처리
+- [ ] 실제 생산라인/장비 제어 없음
+- [ ] 문헌 기반 simulation data임을 표시
+```
+
+## 25.21 개발 AI에 전달할 최종 한 문장
+
+```text
+PureFlow AI는 "물을 가장 많이 줄이는 시스템"이 아니라,
+"품질 기준을 먼저 통과시키고 그 안에서 가장 적은 UPW를 찾는 시스템"으로 구현하라.
+```
